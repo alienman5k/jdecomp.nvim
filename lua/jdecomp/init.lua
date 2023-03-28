@@ -45,7 +45,7 @@ local get_cmd = function(decompiler, class_path, jar_path)
       cmd = {
         "java",
         "-jar",
-        "/Users/imarmole/Software/procyon-decompiler-0.6.0.jar",
+        vim.fn.expand("~/.local/share/nvim/decompiler/procyon-decompiler-0.6.0.jar"),
         class_path
       }
     end
