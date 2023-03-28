@@ -63,15 +63,15 @@ end
 
 
 local jdgroup = vim.api.nvim_create_augroup("JavaDecompiler", { clear = true })
-vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
+vim.api.nvim_create_autocmd({"BufWinEnter"}, {
   pattern = '*.class',
   group = jdgroup,
   callback = function(evt)
-    if not evt then
-      print("Not a valid event")
+    -- print(string.format("Start decompiling during event: '%s'", vim.inspect(evt)))
+    if vim.api.nvim_buf_get_option(evt.buf, "syntax") and vim.api.nvim_buf_get_option(evt.buf, 'readonly') then
+      print('Buffer already decompiled, nothing else to do')
       return
     end
-    -- print(string.format("Start decompiling during event: '%s'", evt.event))
     local jar_path, class_path
     local cmd
 
@@ -108,12 +108,10 @@ vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
       --   end
       -- end,
       on_exit = function()
-        vim.cmd([[
-          syntax enable
-          set syntax=java
-          set nomodified
-          set readonly
-        ]])
+        vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'enable')
+        vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'java')
+        vim.api.nvim_buf_set_option(evt.buf, 'modified', false)
+        vim.api.nvim_buf_set_option(evt.buf, 'readonly', true)
       end
     })
   end
