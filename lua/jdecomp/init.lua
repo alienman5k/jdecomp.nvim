@@ -75,7 +75,12 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
     local jar_path, class_path
     local cmd
 
-    if string.find(evt.file, "zipfile") then
+    if string.find(evt.file, "jdt://") then
+      print("Class from jdt do not decompile")
+      return
+    end
+
+    if string.find(evt.file, "zipfile://") then
       print("Decompiling class inside jar file")
       local pattern = "(zipfile://)(.*)::(.*)"
       _, _, _, jar_path, class_path = string.find(evt.file, pattern)
@@ -83,11 +88,6 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
     else
       cmd = get_cmd(_config.decompiler, evt.file)
     end
-
-    -- P(cmd)
-    -- if cmd then
-    --   vim.cmd("%delete")
-    -- end
 
     vim.fn.jobstart(cmd, {
       stdout_buffered = true,
