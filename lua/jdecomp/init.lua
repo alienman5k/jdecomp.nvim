@@ -12,25 +12,33 @@ vim.filetype.add({
 -- }
 
 local _config = {
-  decompiler = 'cfr', -- cfr, procyon, ferflower
+  path = 'cfr'
 }
 
-M.setup = function(config)
-  if config and config.decompiler then
-    _config.decompiler = config.decompiler
+function M.setup (config)
+  if config and config.path then
+    _config.path = vim.fn.expand(config.path)
   end
 end
 
-local get_cmd = function(decompiler, class_path, jar_path)
+local function get_cmd (class_path, jar_path)
   local cmd
-  -- print(string.format("%s, %s, %s", decompiler, class_path, jar_path))
-  if decompiler == 'cfr' then
+  print(string.format("%s, %s, %s", _config.path, class_path, jar_path))
+  if string.match(_config.path, 'cfr') then
     if jar_path then
-      cmd = { 'cfr', '--extraclasspath', jar_path, class_path }
+      cmd = {
+        _config.path,
+        '--extraclasspath',
+        jar_path,
+        class_path
+      }
     else
-      cmd = { 'cfr', class_path }
+      cmd = {
+        _config.path,
+        class_path
+      }
     end
-  elseif decompiler == 'procyon' then
+  elseif string.match(_config.path, 'procyon') then
     if jar_path then
       -- cmd = {
       --   "java",
@@ -40,16 +48,23 @@ local get_cmd = function(decompiler, class_path, jar_path)
       --   jar_path,
       --   class_path
       -- }
-      cmd = { 'cfr', '--extraclasspath', jar_path, class_path }
+      cmd = {
+        "java",
+        "-jar",
+        _config.path,
+        "--jar-file",
+        jar_path,
+        class_path
+      }
     else
       cmd = {
         "java",
         "-jar",
-        vim.fn.expand("~/.local/share/nvim/decompiler/procyon-decompiler-0.6.0.jar"),
+        _config.path,
         class_path
       }
     end
-  elseif decompiler == 'fernflower' then
+  elseif string.match(_config.path, 'fernflower') then
     -- Fernflower requires to put output in a directory
     if jar_path then
       print("Not yet implemented")
@@ -57,7 +72,7 @@ local get_cmd = function(decompiler, class_path, jar_path)
       print("Not yet implemented")
     end
   end
-  -- vim.inspect(cmd)
+  vim.inspect(cmd)
   return cmd
 end
 
@@ -82,11 +97,12 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
 
     if string.find(evt.file, "zipfile://") then
       print("Decompiling class inside jar file")
+      P(_config)
       local pattern = "(zipfile://)(.*)::(.*)"
       _, _, _, jar_path, class_path = string.find(evt.file, pattern)
-      cmd = get_cmd(_config.decompiler, class_path, jar_path)
+      cmd = get_cmd(class_path, jar_path)
     else
-      cmd = get_cmd(_config.decompiler, evt.file)
+      cmd = get_cmd(evt.file)
     end
 
     vim.fn.jobstart(cmd, {
