@@ -1,4 +1,3 @@
--- print("Plugin jdecomp loaded")
 local M = {}
 
 vim.filetype.add({
@@ -39,26 +38,21 @@ end
 
 -- Decompress a file from a jar file and stored in a tmp file
 local function decompress_file(class, jar, tmp_dir)
-  print(class, jar)
+  -- print(class, jar)
   if not class or not jar then
     vim.notify('class or jar not provided to decompress from jar')
     return
   end
 
-  local cmd = {
-    'unzip',
-    jar,
-    class,
-    '-d',
-    tmp_dir
-  }
+  local cmd = string.format('!unzip %s %s -d %s', jar, class, tmp_dir)
+  -- print("command", vim.inspect(cmd))
   vim.cmd(cmd)
 end
 
 local function get_cmd (class_path, jar_path)
   local cmd = {}
   local tmp_file
-  print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
+  -- print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
   if string.match(_config.decompiler, 'cfr') then
     if _config.provider.cfr.bin then
       table.insert(cmd, _config.provider.cfr.bin)
@@ -68,6 +62,7 @@ local function get_cmd (class_path, jar_path)
       table.insert(cmd, _config.provider.cfr.jar)
     end
     if jar_path then
+      table.insert(cmd, '--extraclasspath')
       table.insert(cmd, jar_path)
     end
     table.insert(cmd, class_path)
@@ -75,10 +70,13 @@ local function get_cmd (class_path, jar_path)
     table.insert(cmd, 'java')
     table.insert(cmd, '-jar')
     table.insert(cmd, _config.provider.procyon.jar)
-    --[[ TODO: Extract the file to a tmp folder and then decompile it and put in the buffer  --]]
     if jar_path then
-      table.insert(cmd, '--jar-file')
-      table.insert(cmd, jar_path)
+      -- If the class is inside a jar, then we need to decompress it to tmp_dir and update class_path to that of the decompressed file
+      local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
+      -- print("tmp_dir", tmp_dir)
+      vim.fn.mkdir(tmp_dir, "p")
+      decompress_file(class_path, jar_path, tmp_dir)
+      class_path = tmp_dir .. '/' .. class_path
     end
     table.insert(cmd, class_path)
   elseif string.match(_config.decompiler, 'fernflower') then
@@ -92,12 +90,12 @@ local function get_cmd (class_path, jar_path)
     table.insert(cmd, "-hdc=1")
 
     local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
-    print("tmp_dir", tmp_dir)
-    vim.fn.mkdir(tmp_dir)
+    -- print("tmp_dir", tmp_dir)
+    vim.fn.mkdir(tmp_dir, "p")
 
     if jar_path then
       decompress_file(class_path, jar_path, tmp_dir)
-      table.insert(cmd, tmp_dir .. class_path)
+      table.insert(cmd, tmp_dir .. '/' .. class_path)
     else
       table.insert(cmd, class_path)
     end
@@ -105,8 +103,8 @@ local function get_cmd (class_path, jar_path)
     -- tmp_file = string.gsub(tmp_dir, '.class', '.java')
     tmp_file = string.format("%s/%s", tmp_dir, string.gsub(vim.fn.fnamemodify(class_path, ":t"), '.class', '.java'))
   end
-  print(vim.inspect(cmd))
-  print("tmp_file",  tmp_file)
+  -- print(vim.inspect(cmd))
+  -- print("tmp_file",  tmp_file)
   return cmd, tmp_file
 end
 
@@ -118,14 +116,14 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
   callback = function(evt)
     -- print(string.format("Start decompiling during event: '%s'", vim.inspect(evt)))
     if vim.api.nvim_buf_get_option(evt.buf, "syntax") and vim.api.nvim_buf_get_option(evt.buf, 'readonly') then
-      print('Buffer already decompiled, nothing else to do')
+      vim.notify('Buffer already decompiled, nothing else to do', vim.log.levels.DEBUG)
       return
     end
     local jar_path, class_path
     local cmd, tmp_file
 
     if string.find(evt.file, "jdt://") then
-      print("Class from jdt do not decompile")
+      vim.notify("Class from jdt do not decompile", vim.log.levels.DEBUG)
       return
     end
 
