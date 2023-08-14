@@ -37,8 +37,27 @@ function M.setup (config)
   end
 end
 
+-- Decompress a file from a jar file and stored in a tmp file
+local function decompress_file(class, jar, tmp_dir)
+  print(class, jar)
+  if not class or not jar then
+    vim.notify('class or jar not provided to decompress from jar')
+    return
+  end
+
+  local cmd = {
+    'unzip',
+    jar,
+    class,
+    '-d',
+    tmp_dir
+  }
+  vim.cmd(cmd)
+end
+
 local function get_cmd (class_path, jar_path)
   local cmd = {}
+  local tmp_file
   print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
   if string.match(_config.decompiler, 'cfr') then
     if _config.provider.cfr.bin then
@@ -64,16 +83,31 @@ local function get_cmd (class_path, jar_path)
     table.insert(cmd, class_path)
   elseif string.match(_config.decompiler, 'fernflower') then
     -- Fernflower requires to put output in a directory, we will use a temp directory
+    -- java -jar ~/Software/fernflower.jar -dgs=1 -hes=1 -hdc=1 <source> <destination>
+    table.insert(cmd, "java")
+    table.insert(cmd, "-jar")
+    table.insert(cmd, _config.provider.fernflower.jar)
+    table.insert(cmd, "-dgs=1")
+    table.insert(cmd, "-hes=1")
+    table.insert(cmd, "-hdc=1")
+
+    local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
+    print("tmp_dir", tmp_dir)
+    vim.fn.mkdir(tmp_dir)
+
     if jar_path then
-      print("Not yet implemented")
-      print(_config.provider.fernflower.jar)
+      decompress_file(class_path, jar_path, tmp_dir)
+      table.insert(cmd, tmp_dir .. class_path)
     else
-      print("Not yet implemented")
-      print(_config.provider.fernflower.jar)
+      table.insert(cmd, class_path)
     end
+    table.insert(cmd, tmp_dir)
+    -- tmp_file = string.gsub(tmp_dir, '.class', '.java')
+    tmp_file = string.format("%s/%s", tmp_dir, string.gsub(vim.fn.fnamemodify(class_path, ":t"), '.class', '.java'))
   end
   print(vim.inspect(cmd))
-  return cmd
+  print("tmp_file",  tmp_file)
+  return cmd, tmp_file
 end
 
 
@@ -88,7 +122,7 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
       return
     end
     local jar_path, class_path
-    local cmd
+    local cmd, tmp_file
 
     if string.find(evt.file, "jdt://") then
       print("Class from jdt do not decompile")
@@ -98,9 +132,9 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
     if string.find(evt.file, "zipfile://") then
       local pattern = "(zipfile://)(.*)::(.*)"
       _, _, _, jar_path, class_path = string.find(evt.file, pattern)
-      cmd = get_cmd(class_path, jar_path)
+      cmd, tmp_file = get_cmd(class_path, jar_path)
     else
-      cmd = get_cmd(evt.file)
+      cmd, tmp_file = get_cmd(evt.file)
     end
 
     vim.fn.jobstart(cmd, {
@@ -110,18 +144,18 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
           if _config.decompiler ~= 'fernflower' then
             vim.api.nvim_buf_set_lines(0, 0, -1, false, data)
           else
-            vim.api.nvim_buf_set_lines(0, -1, -1, false, { "FernFlower is not supported yet" })
+            -- vim.api.nvim_buf_set_lines(0, -1, -1, false, { "FernFlower is not supported yet" })
           end
         end
       end,
-      -- stderr_buffered = true,
-      -- on_stderr = function(_, data)
-      --   if data then
-      --     P(data)
-      --     -- vim.api.nvim_buf_set_lines(0, 0, -1, false, data)
-      --   end
-      -- end,
       on_exit = function()
+        if _config.decompiler == 'fernflower' then
+          -- tmp_file = tmp_dir .. jdecomp .. class_path  (replace .class with .java)
+          -- vim.api.nvim_buf_set_option(evt.buf, 'filetype', 'off')
+          vim.api.nvim_buf_set_lines(evt.buf, 0, -1, true, {})
+          vim.api.nvim_buf_set_lines(evt.buf, 0, 0, true, {'// decompiled with fernflower'})
+          vim.cmd('1read ' .. tmp_file)
+        end
         vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'enable')
         vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'java')
         vim.api.nvim_buf_set_option(evt.buf, 'modified', false)
