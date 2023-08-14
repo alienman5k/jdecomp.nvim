@@ -12,67 +12,67 @@ vim.filetype.add({
 -- }
 
 local _config = {
-  path = 'cfr'
+  -- path = 'cfr',
+  decompiler = 'cfr',
+  provider = {
+    cfr = {
+      bin = 'cfr', -- If binary is not available in $PATH then provide full path of cfr binary (as some distributions provide a binary script around cfr jar) 
+      --jar = '/home/user/.local/cfr/cfr.jar' -- full path of cfr jar
+    },
+    procyon = {
+      jar =  os.getenv('HOME') .. '/Software/procyon-decompiler-0.6.0.jar'
+    },
+    fernflower = {
+      jar = os.getenv('HOME') .. '~/Software/fernflower-decompiler.jar'
+    }
+  }
+
 }
 
 function M.setup (config)
-  if config and config.path then
-    _config.path = vim.fn.expand(config.path)
+  if config and config.decompiler then
+    local decomp = config.decompiler
+    _config.decompiler = decomp
+    _config.provider[decomp] = config.provider[decomp]
   end
 end
 
 local function get_cmd (class_path, jar_path)
-  local cmd
-  print(string.format("%s, %s, %s", _config.path, class_path, jar_path))
-  if string.match(_config.path, 'cfr') then
-    if jar_path then
-      cmd = {
-        _config.path,
-        '--extraclasspath',
-        jar_path,
-        class_path
-      }
+  local cmd = {}
+  print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
+  if string.match(_config.decompiler, 'cfr') then
+    if _config.provider.cfr.bin then
+      table.insert(cmd, _config.provider.cfr.bin)
     else
-      cmd = {
-        _config.path,
-        class_path
-      }
+      table.insert(cmd, 'java')
+      table.insert(cmd, '-jar')
+      table.insert(cmd, _config.provider.cfr.jar)
     end
-  elseif string.match(_config.path, 'procyon') then
     if jar_path then
-      -- cmd = {
-      --   "java",
-      --   "-jar",
-      --   "/Users/imarmole/Software/procyon-decompiler-0.6.0.jar",
-      --   "--jar-file",
-      --   jar_path,
-      --   class_path
-      -- }
-      cmd = {
-        "java",
-        "-jar",
-        _config.path,
-        "--jar-file",
-        jar_path,
-        class_path
-      }
-    else
-      cmd = {
-        "java",
-        "-jar",
-        _config.path,
-        class_path
-      }
+      table.insert(cmd, jar_path)
     end
-  elseif string.match(_config.path, 'fernflower') then
-    -- Fernflower requires to put output in a directory
+    table.insert(cmd, class_path)
+  elseif string.match(_config.decompiler, 'procyon') then
+    table.insert(cmd, 'java')
+    table.insert(cmd, '-jar')
+    table.insert(cmd, _config.provider.procyon.jar)
+    --[[ TODO: Extract the file to a tmp folder and then decompile it and put in the buffer  --]]
+    if jar_path then
+      table.insert(cmd, '--jar-file')
+      table.insert(cmd, jar_path)
+    end
+    table.insert(cmd, class_path)
+  elseif string.match(_config.decompiler, 'fernflower') then
+    -- Fernflower requires to put output in a directory, we will use a temp directory
     if jar_path then
       print("Not yet implemented")
+      print(_config.provider.fernflower.jar)
     else
       print("Not yet implemented")
+      print(_config.provider.fernflower.jar)
     end
   end
-  vim.inspect(cmd)
+  print(vim.inspect(cmd))
   return cmd
 end
 
@@ -96,8 +96,6 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
     end
 
     if string.find(evt.file, "zipfile://") then
-      print("Decompiling class inside jar file")
-      P(_config)
       local pattern = "(zipfile://)(.*)::(.*)"
       _, _, _, jar_path, class_path = string.find(evt.file, pattern)
       cmd = get_cmd(class_path, jar_path)
