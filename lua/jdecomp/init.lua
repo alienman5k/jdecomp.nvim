@@ -4,12 +4,6 @@ vim.filetype.add({
   class = 'class'
 })
 
--- local decompilers = {
---   CFR = 'cfr',
---   PROCYON = 'procyon',
---   FERNFLOWER = 'fernflower',
--- }
-
 local _config = {
   -- path = 'cfr',
   decompiler = 'cfr',
@@ -25,7 +19,6 @@ local _config = {
       jar = os.getenv('HOME') .. '~/Software/fernflower-decompiler.jar'
     }
   }
-
 }
 
 function M.setup (config)
