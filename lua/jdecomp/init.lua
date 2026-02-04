@@ -9,19 +9,21 @@ local _config = {
   decompiler = 'cfr',
   provider = {
     cfr = {
-      bin = 'cfr', -- If binary is not available in $PATH then provide full path of cfr binary (as some distributions provide a binary script around cfr jar) 
-      --jar = '/home/user/.local/cfr/cfr.jar' -- full path of cfr jar
+      bin = 'cfr', -- If binary is not available in $PATH then provide full path of cfr binary (as some distributions provide a binary script around cfr jar)
+      --jar = '/jar/location/cfr.jar' -- full path of cfr jar
     },
     procyon = {
-      jar =  os.getenv('HOME') .. '/Software/procyon-decompiler-0.6.0.jar'
+      bin = 'procyon'
+      -- jar = '/jar/location/procyon-decompiler-0.6.0.jar'
     },
     fernflower = {
-      jar = os.getenv('HOME') .. '~/Software/fernflower-decompiler.jar'
+      bin = 'fernflower'
+      -- jar = '/jar/locationn/fernflower-decompiler.jar'
     }
   }
 }
 
-function M.setup (config)
+function M.setup(config)
   if config and config.decompiler then
     local decomp = config.decompiler
     _config.decompiler = decomp
@@ -33,82 +35,117 @@ end
 local function decompress_file(class, jar, tmp_dir)
   -- print(class, jar)
   if not class or not jar then
-    vim.notify('class or jar not provided to decompress from jar')
-    return
+    -- vim.notify('class or jar not provided to decompress from jar')
+    error('class or jar not provided to decompress from jar', 1)
   end
 
   local cmd = string.format('!unzip %s %s -d %s', jar, class, tmp_dir)
-  -- print("command", vim.inspect(cmd))
+  -- print("unzip command:\n", vim.inspect(cmd))
   vim.cmd(cmd)
 end
 
-local function get_cmd (class_path, jar_path)
+local function get_cfr_cmd(class_path, jar_path)
   local cmd = {}
-  local tmp_file
-  -- print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
-  if string.match(_config.decompiler, 'cfr') then
-    if _config.provider.cfr.bin then
-      table.insert(cmd, _config.provider.cfr.bin)
-    else
-      table.insert(cmd, 'java')
-      table.insert(cmd, '-jar')
-      table.insert(cmd, _config.provider.cfr.jar)
-    end
-    if jar_path then
-      table.insert(cmd, '--extraclasspath')
-      table.insert(cmd, jar_path)
-    end
-    table.insert(cmd, class_path)
-  elseif string.match(_config.decompiler, 'procyon') then
+  if _config.provider.cfr.bin then
+    table.insert(cmd, _config.provider.cfr.bin)
+  else
+    table.insert(cmd, 'java')
+    table.insert(cmd, '-jar')
+    table.insert(cmd, _config.provider.cfr.jar)
+  end
+  if jar_path then
+    table.insert(cmd, '--extraclasspath')
+    table.insert(cmd, jar_path)
+  end
+  table.insert(cmd, class_path)
+  -- print("CFR command: ", vim.inspect(cmd))
+  return cmd
+end
+
+local function get_procyon_cmd(class_path, jar_path)
+  local cmd = {}
+  if _config.provider.procyon.bin then
+    table.insert(cmd, _config.provider.procyon.bin)
+  else
     table.insert(cmd, 'java')
     table.insert(cmd, '-jar')
     table.insert(cmd, _config.provider.procyon.jar)
-    if jar_path then
-      -- If the class is inside a jar, then we need to decompress it to tmp_dir and update class_path to that of the decompressed file
-      local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
-      -- print("tmp_dir", tmp_dir)
-      vim.fn.mkdir(tmp_dir, "p")
-      decompress_file(class_path, jar_path, tmp_dir)
-      class_path = tmp_dir .. '/' .. class_path
-    end
-    table.insert(cmd, class_path)
-  elseif string.match(_config.decompiler, 'fernflower') then
+  end
+  if jar_path then
+    -- If the class is inside a jar, then we need to decompress it to tmp_dir and update class_path to that of the decompressed file
+    local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
+    -- print("tmp_dir", tmp_dir)
+    vim.fn.mkdir(tmp_dir, "p")
+    decompress_file(class_path, jar_path, tmp_dir)
+    class_path = tmp_dir .. '/' .. class_path
+  end
+  table.insert(cmd, class_path)
+  -- print("Procyon command: ", vim.inspect(cmd))
+
+  return cmd
+end
+
+local function get_fernflower_cmd(class_path, jar_path)
     -- Fernflower requires to put output in a directory, we will use a temp directory
     -- java -jar ~/Software/fernflower.jar -dgs=1 -hes=1 -hdc=1 <source> <destination>
+  local cmd = {}
+  local tmp_file
+  if _config.provider.fernflower.bin then
+    table.insert(cmd, _config.provider.fernflower.bin)
+  else
     table.insert(cmd, "java")
     table.insert(cmd, "-jar")
     table.insert(cmd, _config.provider.fernflower.jar)
     table.insert(cmd, "-dgs=1")
     table.insert(cmd, "-hes=1")
     table.insert(cmd, "-hdc=1")
-
-    local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
-    -- print("tmp_dir", tmp_dir)
-    vim.fn.mkdir(tmp_dir, "p")
-
-    if jar_path then
-      decompress_file(class_path, jar_path, tmp_dir)
-      table.insert(cmd, tmp_dir .. '/' .. class_path)
-    else
-      table.insert(cmd, class_path)
-    end
-    table.insert(cmd, tmp_dir)
-    -- tmp_file = string.gsub(tmp_dir, '.class', '.java')
-    tmp_file = string.format("%s/%s", tmp_dir, string.gsub(vim.fn.fnamemodify(class_path, ":t"), '.class', '.java'))
   end
-  -- print(vim.inspect(cmd))
-  -- print("tmp_file",  tmp_file)
+
+  local tmp_dir = vim.fs.dirname(vim.fn.tempname()) .. "/jdecomp"
+  -- print("tmp_dir", tmp_dir)
+  vim.fn.mkdir(tmp_dir, "p")
+  if jar_path then
+    decompress_file(class_path, jar_path, tmp_dir)
+    table.insert(cmd, tmp_dir .. '/' .. class_path)
+  else
+    table.insert(cmd, class_path)
+  end
+  table.insert(cmd, tmp_dir)
+  -- tmp_file = string.gsub(tmp_dir, '.class', '.java')
+  tmp_file = string.format("%s/%s", tmp_dir, string.gsub(vim.fn.fnamemodify(class_path, ":t"), '.class', '.java'))
+
+  return cmd, tmp_file
+end
+
+local function get_cmd(class_path, jar_path)
+  local cmd = {}
+  local tmp_file
+  print(string.format("%s, %s, %s", _config.decompiler, class_path, jar_path))
+  if string.match(_config.decompiler, 'cfr') then
+    cmd = get_cfr_cmd(class_path, jar_path)
+  elseif string.match(_config.decompiler, 'procyon') then
+      print('Get procyon command')
+      cmd = get_procyon_cmd(class_path, jar_path)
+    -- table.insert(cmd, class_path)
+  elseif string.match(_config.decompiler, 'fernflower') then
+    cmd, tmp_file = get_fernflower_cmd(class_path, jar_path)
+  else
+    -- vim.notify("Configured decompiler not found: " .. _config.decompiler, vim.log.levels.ERROR)
+    error("Configured decompiler not found: " .. _config.decompiler, 1)
+  end
+  print(vim.inspect(cmd))
+  print("tmp_file",  tmp_file)
   return cmd, tmp_file
 end
 
 
-local jdgroup = vim.api.nvim_create_augroup("JavaDecompiler", { clear = true })
-vim.api.nvim_create_autocmd({"BufWinEnter"}, {
+local jdgroup = vim.api.nvim_create_augroup('JavaDecompiler', { clear = true })
+vim.api.nvim_create_autocmd({ 'BufWinEnter' }, {
   pattern = '*.class',
   group = jdgroup,
   callback = function(evt)
     -- print(string.format("Start decompiling during event: '%s'", vim.inspect(evt)))
-    if vim.api.nvim_buf_get_option(evt.buf, "syntax") and vim.api.nvim_buf_get_option(evt.buf, 'readonly') then
+    if vim.api.nvim_get_option_value('syntax', {buf = evt.buf}) and vim.api.nvim_get_option_value('readonly', {buf = evt.buf}) then
       vim.notify('Buffer already decompiled, nothing else to do', vim.log.levels.DEBUG)
       return
     end
@@ -144,13 +181,13 @@ vim.api.nvim_create_autocmd({"BufWinEnter"}, {
           -- tmp_file = tmp_dir .. jdecomp .. class_path  (replace .class with .java)
           -- vim.api.nvim_buf_set_option(evt.buf, 'filetype', 'off')
           vim.api.nvim_buf_set_lines(evt.buf, 0, -1, true, {})
-          vim.api.nvim_buf_set_lines(evt.buf, 0, 0, true, {'// decompiled with fernflower'})
+          vim.api.nvim_buf_set_lines(evt.buf, 0, 0, true, { '// decompiled with fernflower' })
           vim.cmd('1read ' .. tmp_file)
         end
-        vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'enable')
-        vim.api.nvim_buf_set_option(evt.buf, 'syntax', 'java')
-        vim.api.nvim_buf_set_option(evt.buf, 'modified', false)
-        vim.api.nvim_buf_set_option(evt.buf, 'readonly', true)
+        vim.api.nvim_set_option_value('syntax', 'enable', {buf = evt.buf})
+        vim.api.nvim_set_option_value('syntax', 'java', {buf = evt.buf})
+        vim.api.nvim_set_option_value('modified', false, {buf = evt.buf})
+        vim.api.nvim_set_option_value('readonly', true, {buf = evt.buf})
       end
     })
   end
