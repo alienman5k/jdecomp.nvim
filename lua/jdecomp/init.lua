@@ -39,7 +39,7 @@ local function decompress_file(class, jar, tmp_dir)
     error('class or jar not provided to decompress from jar', 1)
   end
 
-  local cmd = string.format('!unzip %s %s -d %s', jar, class, tmp_dir)
+  local cmd = string.format('!unzip %s %s -d %s', vim.fn.shellescape(jar), vim.fn.shellescape(class), vim.fn.shellescape(tmp_dir))
   -- print("unzip command:\n", vim.inspect(cmd))
   vim.cmd(cmd)
 end
