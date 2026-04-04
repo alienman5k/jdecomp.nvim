@@ -35,6 +35,6 @@ Lazy
 ## TODO List
 - [ ] As part of the setup, provide an option to auto install decompilers
 - [x] Implement code to support `fernflower` decompiler
-- [ ] Add tests?
+- [x] Add tests? (Partially, will add more at some point)
 - [ ] Add user commands for files with other extensions?
 

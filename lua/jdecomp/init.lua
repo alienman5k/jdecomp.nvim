@@ -1,4 +1,5 @@
 local M = {}
+local helper = require('jdecomp.helper')
 
 vim.filetype.add({
   class = 'class'
@@ -31,18 +32,7 @@ function M.setup(config)
   end
 end
 
--- Decompress a file from a jar file and stored in a tmp file
-local function decompress_file(class, jar, tmp_dir)
-  -- print(class, jar)
-  if not class or not jar then
-    -- vim.notify('class or jar not provided to decompress from jar')
-    error('class or jar not provided to decompress from jar', 1)
-  end
-
-  local cmd = string.format('!unzip %s %s -d %s', vim.fn.shellescape(jar), vim.fn.shellescape(class), vim.fn.shellescape(tmp_dir))
-  -- print("unzip command:\n", vim.inspect(cmd))
-  vim.cmd(cmd)
-end
+local decompress_file = helper.decompress_file
 
 local function get_cfr_cmd(class_path, jar_path)
   local cmd = {}
@@ -137,7 +127,6 @@ local function get_cmd(class_path, jar_path)
   print("tmp_file",  tmp_file)
   return cmd, tmp_file
 end
-
 
 local jdgroup = vim.api.nvim_create_augroup('JavaDecompiler', { clear = true })
 vim.api.nvim_create_autocmd({ 'BufWinEnter' }, {
